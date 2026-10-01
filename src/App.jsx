@@ -43,6 +43,10 @@ function applyLocalAdd(prev, { sessionId, userId, reference, qty, detail }) {
       qty,
       detail: detail || null,
       updated_at: now,
+      reviewed: false,
+      review_status: null,
+      review_note: null,
+      reviewed_at: null,
     },
     ...prev,
   ])
@@ -57,7 +61,7 @@ function applyLocalUndo(prev, { reference, qty }) {
           ? { ...i, qty: Number(i.qty) - Number(qty), updated_at: now }
           : i,
       )
-      .filter((i) => Number(i.qty) !== 0 || i.detail),
+      .filter((i) => Number(i.qty) !== 0 || i.detail || i.reviewed),
   )
 }
 
@@ -358,6 +362,37 @@ function CountApp({ user }) {
     })
   }
 
+  function updateReview(reference, fields) {
+    setItems((prev) => prev.map((i) => (i.reference === reference ? { ...i, ...fields } : i)))
+    enqueue({
+      type: 'run',
+      sessionId,
+      run: async () => {
+        const { error: err } = await supabase
+          .from('count_items')
+          .update(fields)
+          .eq('session_id', sessionId)
+          .eq('reference', reference)
+        if (err) throw err
+      },
+    })
+  }
+
+  function reviewItem(reference, { status, note }) {
+    const trimmedNote = (note || '').trim()
+    updateReview(reference, {
+      reviewed: true,
+      review_status: status,
+      review_note: trimmedNote || null,
+      reviewed_at: new Date().toISOString(),
+    })
+    showFlash(`${reference} marcada como revisada`)
+  }
+
+  function unreviewItem(reference) {
+    updateReview(reference, { reviewed: false, review_status: null, review_note: null, reviewed_at: null })
+  }
+
   function deleteItem(reference) {
     undoBySessionRef.current[sessionId] = stackFor(sessionId).filter((e) => e.reference !== reference)
     setItems((prev) => prev.filter((i) => i.reference !== reference))
@@ -423,7 +458,14 @@ function CountApp({ user }) {
               Deshacer
             </button>
           </div>
-          <ItemList items={items} onEditQty={editQty} onEditDetail={editDetail} onDelete={deleteItem} />
+          <ItemList
+            items={items}
+            onEditQty={editQty}
+            onEditDetail={editDetail}
+            onDelete={deleteItem}
+            onReview={reviewItem}
+            onUnreview={unreviewItem}
+          />
         </>
       ) : (
         !loading && <p className="muted">Crea una sesión para capturar.</p>

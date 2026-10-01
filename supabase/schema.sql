@@ -12,6 +12,10 @@ create table public.count_items (
   qty numeric not null default 0,
   detail text,
   updated_at timestamptz not null default now(),
+  reviewed boolean not null default false,
+  review_status text check (review_status is null or review_status in ('ok', 'equivalente', 'no_creado')),
+  review_note text,
+  reviewed_at timestamptz,
   primary key (session_id, reference)
 );
 
@@ -61,7 +65,7 @@ begin
    where ci.session_id = p_session and ci.reference = v_log.reference;
   delete from public.count_items ci
    where ci.session_id = p_session and ci.reference = v_log.reference
-     and ci.qty = 0 and ci.detail is null
+     and ci.qty = 0 and ci.detail is null and ci.reviewed = false
      and not exists (select 1 from public.count_log l where l.session_id = p_session and l.reference = v_log.reference);
   return query select v_log.reference, v_log.qty;
 end $$;

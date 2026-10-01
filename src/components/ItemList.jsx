@@ -2,19 +2,31 @@ import { useMemo, useState } from 'react'
 import { formatQty, normalizeRef } from '../lib/normalize'
 import ItemRow from './ItemRow'
 
-export default function ItemList({ items, onEditQty, onEditDetail, onDelete }) {
+const FILTERS = [
+  { value: 'all', label: 'Todas' },
+  { value: 'pending', label: 'Pendientes' },
+  { value: 'reviewed', label: 'Revisadas' },
+]
+
+export default function ItemList({ items, onEditQty, onEditDetail, onDelete, onReview, onUnreview }) {
   const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState('all')
 
   const filtered = useMemo(() => {
     const q = normalizeRef(query)
     const qRaw = query.trim().toLowerCase()
-    if (!qRaw) return items
     return items.filter((item) => {
+      if (filter === 'pending' && item.reviewed) return false
+      if (filter === 'reviewed' && !item.reviewed) return false
+      if (!qRaw) return true
       const refMatch = item.reference.includes(q)
       const detailMatch = (item.detail || '').toLowerCase().includes(qRaw)
-      return refMatch || detailMatch
+      const noteMatch = (item.review_note || '').toLowerCase().includes(qRaw)
+      return refMatch || detailMatch || noteMatch
     })
-  }, [items, query])
+  }, [items, query, filter])
+
+  const reviewedCount = items.filter((i) => i.reviewed).length
 
   return (
     <section className="card">
@@ -24,11 +36,26 @@ export default function ItemList({ items, onEditQty, onEditDetail, onDelete }) {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Por referencia o detalle"
+          placeholder="Por referencia, detalle o nota"
           autoCorrect="off"
           autoComplete="off"
         />
       </label>
+
+      <div className="chips filter-chips" role="radiogroup" aria-label="Filtrar referencias">
+        {FILTERS.map((f) => (
+          <button
+            key={f.value}
+            type="button"
+            role="radio"
+            aria-checked={filter === f.value}
+            className={filter === f.value ? 'chip active' : 'chip'}
+            onClick={() => setFilter(f.value)}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
 
       {filtered.length === 0 ? (
         <p className="muted">{items.length === 0 ? 'Aún no hay capturas en esta sesión.' : 'Ninguna referencia coincide.'}</p>
@@ -41,13 +68,16 @@ export default function ItemList({ items, onEditQty, onEditDetail, onDelete }) {
               onEditQty={onEditQty}
               onEditDetail={onEditDetail}
               onDelete={onDelete}
+              onReview={onReview}
+              onUnreview={onUnreview}
             />
           ))}
         </ul>
       )}
 
       <p className="totals">
-        {items.length} referencias distintas · suma {formatQty(items.reduce((acc, i) => acc + Number(i.qty), 0))}
+        {items.length} referencias distintas · {reviewedCount} revisadas · suma{' '}
+        {formatQty(items.reduce((acc, i) => acc + Number(i.qty), 0))}
       </p>
     </section>
   )
