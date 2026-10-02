@@ -197,9 +197,21 @@ function CountApp({ user }) {
       setItems([])
       return
     }
-    const { data, error: err } = await supabase.from('count_items').select('*').eq('session_id', id)
-    if (err) throw err
-    setItems(sortItems(data || []))
+    // Supabase devuelve como máximo 1000 filas por petición: paginar hasta traerlas todas.
+    const PAGE_SIZE = 1000
+    const all = []
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error: err } = await supabase
+        .from('count_items')
+        .select('*')
+        .eq('session_id', id)
+        .order('reference', { ascending: true })
+        .range(from, from + PAGE_SIZE - 1)
+      if (err) throw err
+      all.push(...(data || []))
+      if (!data || data.length < PAGE_SIZE) break
+    }
+    setItems(sortItems(all))
   }, [])
 
   useEffect(() => {
